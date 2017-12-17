@@ -5,9 +5,7 @@
 #include <QTreeView>
 #include <QTime>
 
-#include "QSection.h"
 #include "QOEPropertyItemDelegate.hpp"
-#include "QOEPropertyView.hpp"
 #include "QOEProperty.hpp"
 #include "Icons.hpp"
 #include "QOEPropertiesTreeView.hpp"
