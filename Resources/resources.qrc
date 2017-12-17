@@ -1,0 +1,24 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>stylesheets/global.qss</file>
+		
+        <file>icons/cross.png</file>
+        <file>icons/cube.png</file>
+        <file>icons/gear.png</file>
+        <file>icons/text.png</file>
+        <file>icons/integer.png</file>
+		
+        <file>widgets/checkbox_checked.png</file>
+        <file>widgets/checkbox_checked_disabled.png</file>
+        <file>widgets/checkbox_checked_focus.png</file>
+		
+        <file>widgets/checkbox_indeterminate.png</file>
+        <file>widgets/checkbox_indeterminate_disabled.png</file>
+        <file>widgets/checkbox_indeterminate_focus.png</file>
+		
+        <file>widgets/checkbox_unchecked.png</file>
+        <file>widgets/checkbox_unchecked_disabled.png</file>
+        <file>widgets/checkbox_unchecked_focus.png</file>
+    </qresource>
+</RCC>
