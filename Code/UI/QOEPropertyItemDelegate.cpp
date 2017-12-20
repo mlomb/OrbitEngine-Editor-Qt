@@ -160,11 +160,10 @@ void QOEPropertyItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* 
 	PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
 
 	const metacpp::TypeID typeID = item->getTypeID();
-	void* ptr = item->getProperty()->getPtr();
 
 #define STORE_EDITOR_PROPERTY(type, editorClass) \
 	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		OrbitEngine::Misc::Property< ##type *> prop = static_cast< ##type *>(ptr); \
+		OrbitEngine::Misc::Property< ##type >* prop = static_cast<OrbitEngine::Misc::Property< ##type >*>(item->getProperty()); \
 		##editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
 
 #define STORE_EDITOR_PROPERTY_QT(type, editorClass, editorGetValue) \
@@ -174,7 +173,7 @@ void QOEPropertyItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* 
 
 #define STORE_EDITOR_PROPERTY_VECTOR(type, vType, vN) \
 	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		OrbitEngine::Misc::Property< ##type *> prop = static_cast< ##type *>(ptr); \
+		OrbitEngine::Misc::Property< ##type >* prop = static_cast<OrbitEngine::Misc::Property< ##type >*>(item->getProperty()); \
 		QNumericVector< ##vType, ##vN > *editor_widget = static_cast< QNumericVector< ##vType, ##vN > *>(editor); \
 		##type vec; \
 		for(int i = 0; i < vN; i++) { \

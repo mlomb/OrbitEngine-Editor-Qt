@@ -17,7 +17,7 @@ Editor::Editor(QWidget *parent)
 
 	/* Scene Load Procedure */
 	m_Scene = new OrbitEngine::Engine::Scene();
-	m_SceneView = new SceneView(m_Scene);
+	m_SceneRunner = new OrbitEngine::Engine::SceneRunner(m_Scene);
 	/* --- */
 
 	ui->dock_inspector->setMinimumSize(QSize(350, ui->dock_inspector->minimumHeight()));
@@ -26,7 +26,7 @@ Editor::Editor(QWidget *parent)
 	ui->sceneHierarchy->header()->close();
 	ui->sceneHierarchy->setModel(new QOESceneHierarchyModel(m_Scene->getRoot()));
 
-	ui->mainView->setLoopeable(m_SceneView);
+	ui->mainView->setLoopeable(m_SceneRunner);
 
 	connect(ui->sceneHierarchy->selectionModel(), SIGNAL(selectionChanged(const QItemSelection&, const QItemSelection&)), this, SLOT(sceneObjectSelection(const QItemSelection&, const QItemSelection&)));
 }

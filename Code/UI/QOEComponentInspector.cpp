@@ -12,6 +12,8 @@
 
 #include <OE/Math/Vec4.hpp>
 
+#include "OE/Engine/Component.hpp"
+
 QOEComponentInspector::QOEComponentInspector(OrbitEngine::Engine::SceneObject* sceneObject, QWidget *parent)
 	: QWidget(parent), ui(new Ui::QOEComponentInspector), m_SceneObject(sceneObject)
 {
@@ -27,7 +29,7 @@ QOEComponentInspector::QOEComponentInspector(OrbitEngine::Engine::SceneObject* s
 
 	if (sceneObject->m_Name.operator std::string() == "Child5") {
 		for (int i = 0; i < 50; i++) {
-			components.push_back(comps[1]);
+			components.push_back(comps[0]);
 		}
 	}
 

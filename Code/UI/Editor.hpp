@@ -7,6 +7,8 @@
 #include "OE/Engine/Scene.hpp"
 #include "SceneView.hpp"
 
+#include <OE/Engine/SceneRunner.hpp>
+
 namespace Ui
 {
     class Editor;
@@ -25,7 +27,7 @@ private slots:
 private:
 	QScopedPointer<Ui::Editor> ui;
 	OrbitEngine::Engine::Scene* m_Scene;
-	SceneView* m_SceneView;
+	OrbitEngine::Engine::SceneRunner* m_SceneRunner;
 };
 
 #endif

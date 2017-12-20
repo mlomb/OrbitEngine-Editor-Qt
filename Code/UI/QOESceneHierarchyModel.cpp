@@ -13,6 +13,8 @@
 
 #include "Icons.hpp"
 
+#include "OE/Engine/MeshRenderer.hpp"
+
 QOESceneHierarchyModel::QOESceneHierarchyModel(OrbitEngine::Engine::SceneObject* root)
 	: m_Root(root)
 {
@@ -23,21 +25,21 @@ QOESceneHierarchyModel::QOESceneHierarchyModel(OrbitEngine::Engine::SceneObject*
 	new std::thread([&]() {
 		int i = 4;
 		while (true) {
-#define ttt 100
+#define ttt 500
 #if _WIN32
 			Sleep(ttt);
 #else
 			usleep(ttt * 1000);
 #endif
 			OrbitEngine::Engine::SceneObject* toAdd = i % 2 ? m_Root : m_Root->childAt(1);
-			toAdd->addChildren(new OrbitEngine::Engine::SceneObject("Child" + std::to_string(i)));
-			//std::cout << "Added " << i << "\n";
-			i++;
+			OrbitEngine::Engine::SceneObject* added = toAdd->addChildren("Child" + std::to_string(i));
+			if (added) {
+				added->addComponent<OrbitEngine::Engine::MeshRenderer>();
+				//std::cout << "Added " << i << "\n";
+				i++;
 
-			m_Root->childAt(1)->m_Name = "just added " + std::to_string(i);
-
-			auto& p = m_Root->childAt(1)->getComponents()[0]->test_using_a_very_long_name_here;
-			p = p + 1;
+				m_Root->childAt(1)->m_Name = "just added " + std::to_string(i);
+			}
 		}
 	});
 }
@@ -96,7 +98,7 @@ QModelIndex QOESceneHierarchyModel::parent(const QModelIndex& index) const
 		return QModelIndex();
 
 	OrbitEngine::Engine::SceneObject* childItem = getItemFromIndex(index);
-	OrbitEngine::Engine::SceneObject* parentItem = childItem->parent();
+	OrbitEngine::Engine::SceneObject* parentItem = childItem->getParent();
 
 	if (parentItem == m_Root)
 		return QModelIndex();
