@@ -1,195 +1,34 @@
 #include "QOEPropertiesModel.hpp"
 
-#include <MetaCPP/Runtime.hpp>
-#include <MetaCPP/Type.hpp>
-
 #include "Icons.hpp"
 
-PropertiesModelNode::PropertiesModelNode(OrbitEngine::Misc::OEObject* object, QAbstractItemModel* model, PropertiesModelNode* parent)
-	: m_Model(model), m_Parent(parent), m_Object(object), m_Field(0), m_Property(0)
+#include "OE/Misc/Log.hpp"
+
+QOEPropertiesModelItem::~QOEPropertiesModelItem()
 {
-	initObject();
+	mutex.lock();
+	QPixmapCache::remove(pixmapKey);
+	for (auto i : childrens)
+		delete i;
+	mutex.unlock();
 }
 
-PropertiesModelNode::PropertiesModelNode(const metacpp::Field* field, OrbitEngine::Misc::PropertyBase* prop, QAbstractItemModel* model, PropertiesModelNode* parent)
-	: m_Model(model), m_Parent(parent), m_Object(0), m_Field(field), m_Property(prop)
+QOEPropertiesModel::QOEPropertiesModel(std::vector<void*>& objects, OrbitEngine::Meta::Type* objects_type, EditorInteraction* editorInteraction, QTreeView* view)
+	: QAbstractItemModel(view), m_View(view)
 {
-	metacpp::Storage* metaStorage = metacpp::Runtime::GetStorage();
+	m_Root = new QOEPropertiesModelItem();
 
-	m_PropertyTypeID = metaStorage->getType(field->getType()->getTypeID())->getTemplateArguments()[0]->getTypeID();
+	connect(editorInteraction, SIGNAL(sync()), this, SLOT(sync()), Qt::ConnectionType::DirectConnection);
 
-	if (metaStorage->isDerived(m_PropertyTypeID, metacpp::TypeInfo<OrbitEngine::Misc::OEObject>::ID)) {
-		m_Object = static_cast<OrbitEngine::Misc::OEObject*>(prop->getPtr());
-		initObject();
+	for (void* object : objects) {
+		QOEPropertiesModelItem* item = new QOEPropertiesModelItem();
+
+		item->object = object;
+		item->type = objects_type;
+		item->parent = m_Root;
+
+		m_Root->childrens.push_back(item);
 	}
-	else {
-		m_Loaded = true;
-
-		m_CallbackPtr = prop->onModification.AddListener([&](OrbitEngine::Application::Event e)-> void {
-			_value_expired = true;
-			if(m_Index)
-				emit m_Model->dataChanged(*m_Index, *m_Index);
-		});
-	}
-
-	/*
-	// Necessary?
-	if (false) {}
-	else if (m_PropertyTypeID == metacpp::TypeInfo<std::string>::ID)
-		m_PropertyIcon = "text";
-	else if (m_PropertyTypeID == metacpp::TypeInfo<int>::ID)
-		m_PropertyIcon = "integer";
-	else if (m_PropertyTypeID == metacpp::TypeInfo<float>::ID)
-		m_PropertyIcon = "decimal";
-	*/
-
-	// Generate field name
-	std::string name = field->getQualifiedName().getName();
-
-	if (name.size() > 0) {
-		if (name.size() >= 2) {
-			if (name[1] == '_')
-				name = name.substr(2);
-		}
-
-		name[0] = toupper(name[0]);
-	}
-
-	m_FieldName = QString::fromStdString(name);
-}
-
-PropertiesModelNode::~PropertiesModelNode() {
-	if (m_Property)
-		m_Property->onModification.RemoveListener(m_CallbackPtr);
-	if (m_Index)
-		delete m_Index;
-	for (PropertiesModelNode* child : m_Childs)
-		delete child;
-	m_Childs.clear();
-}
-
-void PropertiesModelNode::populate() {
-	m_Loaded = true;
-
-	if (m_Object == nullptr)
-		return;
-
-	metacpp::Storage* metaStorage = metacpp::Runtime::GetStorage();
-
-	for (const metacpp::Field* f : metaStorage->getAllFields(m_Object->getType())) {
-		metacpp::Type* fieldType = metaStorage->getType(f->getType()->getTypeID());
-
-		if (fieldType->getQualifiedName().getName() == "Property") {
-			OrbitEngine::Misc::PropertyBase* prop = f->get<OrbitEngine::Misc::PropertyBase>(m_Object);
-
-			addChild(new PropertiesModelNode(f, prop, m_Model, this));
-		}
-	}
-}
-
-QVariant PropertiesModelNode::data(int column, int role) const {
-	switch (role) {
-	case Qt::TextAlignmentRole:
-		return Qt::AlignVCenter | Qt::AlignLeft;
-	case Qt::EditRole:
-	case Qt::DisplayRole:
-	{
-		if (column == 0) {
-			if (!m_Property)
-				return m_ObjectName;
-			else
-				return m_FieldName;
-		}
-		else { // column == 1
-			if (m_Object) {
-				if (m_Property)
-					return m_ObjectName;
-				else
-					return "*should span*";
-			}
-
-			return "Unsupported type";
-		}
-	}
-	case Qt::DecorationRole:
-	{
-		std::string iconName;
-		if (m_Object) {
-			if ((!m_Property && column == 0) ||
-				(m_Property && column == 1))
-				iconName = "gear";
-		}
-		else if (column == 0 && m_Property)
-			iconName = m_PropertyIcon;
-		else if (column == 1)
-			iconName = "cross";
-
-		if (iconName.size() > 0)
-			return Icons::GetIcon(iconName);
-		return QVariant();
-	}
-	default:
-		return QVariant();
-	}
-}
-
-void PropertiesModelNode::initObject() {
-	if (m_Object == nullptr) // root
-		return;
-
-	metacpp::Storage* metaStorage = metacpp::Runtime::GetStorage();
-
-	m_ObjectName = QString::fromStdString(m_Object->getType()->getQualifiedName().getName());
-}
-
-PropertiesModelNode* PropertiesModelNode::getParent() {
-	return m_Parent;
-}
-
-PropertiesModelNode* PropertiesModelNode::childAt(int row) const {
-	if (row >= 0 && row < m_Childs.size())
-		return m_Childs[row];
-	return 0;
-}
-
-int PropertiesModelNode::childCount() const {
-	return m_Childs.size();
-}
-
-void PropertiesModelNode::addChild(PropertiesModelNode* node) {
-	m_Childs.push_back(node);
-}
-
-bool PropertiesModelNode::isPopulated() const {
-	return m_Loaded;
-}
-
-bool PropertiesModelNode::shouldSpan() const {
-	return m_Object && !m_Property;
-}
-
-void PropertiesModelNode::setIndex(QPersistentModelIndex* persistentIndex) {
-	m_Index = persistentIndex;
-}
-
-QPersistentModelIndex* PropertiesModelNode::getIndex() const {
-	return m_Index;
-}
-
-metacpp::TypeID PropertiesModelNode::getTypeID() const {
-	return m_PropertyTypeID;
-}
-
-OrbitEngine::Misc::PropertyBase* PropertiesModelNode::getProperty() const {
-	return m_Property;
-}
-
-QOEPropertiesModel::QOEPropertiesModel(std::vector<OrbitEngine::Misc::OEObject*>& objects, QObject* parent)
-	: QAbstractItemModel(parent), m_Objects(objects), m_Root(0), m_View(static_cast<QTreeView*>(parent))
-{
-	qRegisterMetaType<QVector<int>>("QVector<int>");
-
-	buildRoot();
 }
 
 QOEPropertiesModel::~QOEPropertiesModel()
@@ -197,20 +36,81 @@ QOEPropertiesModel::~QOEPropertiesModel()
 	delete m_Root;
 }
 
-void QOEPropertiesModel::buildRoot()
+void QOEPropertiesModel::sync()
 {
-	metacpp::Storage* metaStorage = metacpp::Runtime::GetStorage();
-
-	m_Root = new PropertiesModelNode(nullptr, this);
-
-	for (OrbitEngine::Misc::OEObject* object : m_Objects)
-		m_Root->addChild(new PropertiesModelNode(object, this, m_Root));
+	for (QOEPropertiesModelItem* item : m_Root->childrens) {
+		sync(item, QModelIndex());
+	}
 }
 
-PropertiesModelNode* QOEPropertiesModel::getItemFromIndex(const QModelIndex& index) const
+void QOEPropertiesModel::sync(QOEPropertiesModelItem* item, const QModelIndex& index)
+{
+	{
+		QMutexLocker locker(&item->mutex);
+
+		if (!item->type)
+			return;
+
+		OrbitEngine::Meta::Kind kind = item->type->GetKind();
+
+		if (item->parent != m_Root) {
+			item->object = 0;
+
+			OrbitEngine::Meta::Variant v = item->member->Get(item->parent->object);
+
+			if (kind == OrbitEngine::Meta::Kind::CLASS) {
+				item->object = v.GetPointer();
+				item->value = OrbitEngine::Meta::Variant();
+			}
+			else {
+				if (item->value != v) {
+					item->value = v;
+					item->value_changed = true;
+					emit dataChanged(index, this->index(index.row(), 1, index.parent()), { Qt::DisplayRole, Qt::EditRole });
+				}
+			}
+		}
+
+		if (item->object == 0)
+			return; // NULL param
+
+		// Optimize the syncronization
+		bool modification = false;
+		if (item->childrens.size() != item->type->GetMembers().size()) {
+			item->childrens.resize(item->type->GetMembers().size());
+			modification = true;
+		}
+
+		int i = 0;
+		for (OrbitEngine::Meta::Member* member : item->type->GetMembers()) {
+			QOEPropertiesModelItem* child = nullptr;
+			if (i < item->childrens.size())
+				child = item->childrens[i];
+			if (child == nullptr)
+				item->childrens[i] = child = new QOEPropertiesModelItem();
+			child->type = member->GetType();
+			child->member = member;
+			child->parent = item;
+
+			i++;
+		}
+
+		if (modification) {
+			QList<QPersistentModelIndex> a = { QPersistentModelIndex(index) };
+			emit layoutChanged(a);
+		}
+	}
+
+	int row = 0;
+	for (QOEPropertiesModelItem* child : item->childrens) {
+		sync(child, createIndex(row++, 0, item));
+	}
+}
+
+QOEPropertiesModelItem* QOEPropertiesModel::getItemFromIndex(const QModelIndex& index) const
 {
 	if (index.isValid()) {
-		PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
+		QOEPropertiesModelItem* item = static_cast<QOEPropertiesModelItem*>(index.internalPointer());
 		if (item)
 			return item;
 	}
@@ -219,27 +119,22 @@ PropertiesModelNode* QOEPropertiesModel::getItemFromIndex(const QModelIndex& ind
 
 QModelIndex QOEPropertiesModel::index(int row, int column, const QModelIndex& parent) const
 {
+	if (row < 0 || column < 0)
+		return QModelIndex();
 	if (parent.isValid() && parent.column() != 0)
 		return QModelIndex();
 
-	PropertiesModelNode* parentItem = getItemFromIndex(parent);
-	PropertiesModelNode* childItem = parentItem->childAt(row);
+	QOEPropertiesModelItem* parentItem = getItemFromIndex(parent);
 
-	if (childItem) {
-		QModelIndex index = createIndex(row, column, childItem);
-		if (column == 1 && childItem->getIndex() == 0) {
-			childItem->setIndex(new QPersistentModelIndex(index));
+	if (row >= 0 && row < parentItem->childrens.size()) {
+		QOEPropertiesModelItem* childItem = parentItem->childrens.at(row);
 
-			// ugly
-			bool shouldSpan = childItem->shouldSpan();
-			if (m_View->isFirstColumnSpanned(index.row(), index.parent()) != shouldSpan)
-				m_View->setFirstColumnSpanned(index.row(), index.parent(), shouldSpan);
+		if (childItem) {
+			QModelIndex index = createIndex(row, column, childItem);
+			return index;
 		}
-
-		return index;
 	}
-	else
-		return QModelIndex();
+	return QModelIndex();
 }
 
 QModelIndex QOEPropertiesModel::parent(const QModelIndex& index) const
@@ -247,19 +142,19 @@ QModelIndex QOEPropertiesModel::parent(const QModelIndex& index) const
 	if (!index.isValid())
 		return QModelIndex();
 
-	PropertiesModelNode* childItem = getItemFromIndex(index);
-	PropertiesModelNode* parentItem = childItem->getParent();
+	QOEPropertiesModelItem* childItem = getItemFromIndex(index);
+	QOEPropertiesModelItem* parentItem = childItem->parent;
 
 	if (parentItem == m_Root)
 		return QModelIndex();
 
-	return createIndex(parentItem->childCount(), 0, parentItem);
+	return createIndex(std::find(parentItem->childrens.begin(), parentItem->childrens.end(), childItem) - parentItem->childrens.begin(), 0, parentItem);
 }
 
 int QOEPropertiesModel::rowCount(const QModelIndex& parent) const
 {
-	PropertiesModelNode* parentItem = getItemFromIndex(parent);
-	return parentItem->isPopulated() ? parentItem->childCount() : 0;
+	QOEPropertiesModelItem* parentItem = getItemFromIndex(parent);
+	return int(parentItem->childrens.size());
 }
 
 int QOEPropertiesModel::columnCount(const QModelIndex& parent) const
@@ -267,58 +162,61 @@ int QOEPropertiesModel::columnCount(const QModelIndex& parent) const
 	return 2;
 }
 
-QSize QOEPropertiesModel::span(const QModelIndex& index) const
-{
-	PropertiesModelNode* item = getItemFromIndex(index);
-	return index.column() == 0 ? QSize(item->shouldSpan() ? 2 : 1, 1) : QAbstractItemModel::span(index);
-}
-
-Qt::ItemFlags QOEPropertiesModel::flags(const QModelIndex& index) const
-{
-	if (!index.isValid())
-		return 0;
-
-	Qt::ItemFlags flags = QAbstractItemModel::flags(index);
-
-	if (index.column() == 1) {
-		flags |= Qt::ItemIsEditable;
-		flags |= Qt::ItemIsEnabled;
-	}
-
-	return flags;
-}
-
 QVariant QOEPropertiesModel::data(const QModelIndex& index, int role) const
 {
 	if (!index.isValid())
 		return QVariant();
 
-	PropertiesModelNode* item = getItemFromIndex(index);
-	return item->data(index.column(), role);
+	QOEPropertiesModelItem* item = getItemFromIndex(index);
+
+
+	QMutexLocker locker(&item->mutex);
+
+	int column = index.column();
+
+	switch (role) {
+	case Qt::TextAlignmentRole:
+		return QVariant(Qt::AlignVCenter | Qt::AlignLeft);
+	case Qt::DisplayRole:
+		if (column == 0) {
+			return QString::fromStdString(item->member ? item->member->GetName() : item->type->GetName());
+		}
+		else { // column = 1
+			return QString::fromStdString(item->type->GetName());
+		}
+	case Qt::EditRole:
+		return "INVALID";
+	case Qt::DecorationRole:
+	{
+		std::string icon = "";
+		if (column == 0) {
+			if (!item->member)
+				icon = "cube";
+		}
+		else { // column = 1
+			if (item->object)
+				icon = "gear";
+		}
+		if (icon.size() > 0)
+			return Icons::GetIcon(icon);
+		else
+			return QVariant();
+	}
+	default:
+		return QVariant();
+	}
 }
 
-bool QOEPropertiesModel::hasChildren(const QModelIndex& parent) const
+Qt::ItemFlags QOEPropertiesModel::flags(const QModelIndex& index) const
 {
-	PropertiesModelNode* parentItem = getItemFromIndex(parent);
-	if (!parentItem->isPopulated())
-		return true;
+	Qt::ItemFlags flags = QAbstractItemModel::flags(index);
 
-	return QAbstractItemModel::hasChildren(parent);
-}
+	if (index.isValid()) {
+		QOEPropertiesModelItem* item = getItemFromIndex(index);
 
-void QOEPropertiesModel::fetchMore(const QModelIndex& parent)
-{
-	PropertiesModelNode* parentItem = getItemFromIndex(parent);
-	parentItem->populate();
-	/*
-	beginInsertRows(parent, 0, parentItem->childs.size() - 1);
-	insertRows(0, parentItem->childs.size() - 1, parent);
-	endInsertRows();
-	*/
-}
-
-bool QOEPropertiesModel::canFetchMore(const QModelIndex& parent) const
-{
-	PropertiesModelNode* parentItem = getItemFromIndex(parent);
-	return !parentItem->isPopulated();
+		if (index.column() == 1 && item->member && !item->object) {
+			flags |= Qt::ItemIsEditable;
+		}
+	}
+	return flags;
 }

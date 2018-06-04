@@ -2,8 +2,7 @@
 #define qoewidget_hpp
 
 #include <QWidget>
-
-#include <thread>
+#include <QThread>
 
 #include <OE/Application/Window.hpp>
 #include <OE/Application/Context.hpp>
@@ -24,6 +23,7 @@ public:
 #if OE_WINDOWS
 	WNDPROC _WNDPROC;
 #endif
+
 protected:
 	void run();
 
@@ -38,7 +38,7 @@ private:
 	OrbitEngine::Application::Looper* m_Looper;
 	OrbitEngine::Application::Loopeable* m_Loopeable;
 
-	std::thread* m_Thread;
+	QThread* m_Thread;
 };
 
 #endif

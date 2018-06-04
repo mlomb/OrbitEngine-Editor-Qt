@@ -7,23 +7,21 @@
 #include <QApplication>
 #include <QPixmapCache>
 
-#include "QOEProperty.hpp"
+#include <QCheckBox>
+#include <QLineEdit>
+#include "QNumeric.hpp"
+
 #include <OE/Math/Vec4.hpp>
 
-#include <OE/Misc/Property.hpp>
 #include <OE/Engine/Transform.hpp>
 #include <OE/Math/Vec2.hpp>
 #include <OE/Math/Vec3.hpp>
 #include <OE/Math/Vec4.hpp>
 
-#include "QOEProperty.hpp"
+static QWidget* s_Placeholders[50];
 
-#include <MetaCPP/TypeInfo.hpp>
-
-QMap<metacpp::TypeID, QWidget*> QOEPropertyItemDelegate::s_Placeholders;
-
-QOEPropertyItemDelegate::QOEPropertyItemDelegate(QObject* parent)
-	: QStyledItemDelegate(parent)
+QOEPropertyItemDelegate::QOEPropertyItemDelegate(EditorInteraction* editorInteraction, QObject* parent)
+	: QStyledItemDelegate(parent), m_EditorInteraction(editorInteraction)
 {
 	QPixmapCache::setCacheLimit(10240 * 5); // 30MB
 }
@@ -35,38 +33,48 @@ QOEPropertyItemDelegate::~QOEPropertyItemDelegate()
 
 void QOEPropertyItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
-	PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
-	if (!index.isValid() || index.column() != 1 || item->shouldSpan()) {
+	if (!index.isValid() || index.column() != 1) {
 		QStyledItemDelegate::paint(painter, option, index);
 		return;
 	}
-	
-	bool hover = option.state & QStyle::StateFlag::State_MouseOver;
 
-	QRect targetRect = updateRect(option.rect);
-	QString key = QString::number((ulong)item);
+	QOEPropertiesModelItem* item = static_cast<QOEPropertiesModelItem*>(index.internalPointer());
+	OrbitEngine::Meta::Kind kind = item->type->GetKind();
 	QPixmap pixmap;
 
-	if (!QPixmapCache::find(key, pixmap) || pixmap.size() != targetRect.size() || item->_value_expired || item->_hover_last != hover) {
-		metacpp::TypeID typeID = item->getTypeID();
-		QWidget* widget = 0;
+	bool hover = option.state & QStyle::StateFlag::State_MouseOver;
+	QRect targetRect = updateRect(option.rect);
 
-		auto it = s_Placeholders.find(typeID);
-		if (it != s_Placeholders.end())
-			widget = it.value();
-		else {
-			widget = createEditorWidget(item->getTypeID(), nullptr);
-			s_Placeholders.insert(typeID, widget);
+	bool regenerate = true;
+
+	if (item->pixmapKey.isValid()) {
+		if (!item->value_changed && item->last_hover == hover) {
+			if (QPixmapCache::find(item->pixmapKey, &pixmap)) {
+				if (pixmap.size() == targetRect.size())
+					regenerate = false;
+			}
+		}
+	}
+
+	if (regenerate) {
+		OE_ASSERT(kind < 50);
+
+		QWidget* widget = s_Placeholders[kind];
+
+		if (!widget) {
+			widget = createEditorWidget(kind);
+			if (!widget) {
+				// unsupported property
+				QStyledItemDelegate::paint(painter, option, index);
+				return;
+			}
+			s_Placeholders[kind] = widget;
 		}
 
-		if (widget == nullptr) { // unsupported property
-			QStyledItemDelegate::paint(painter, option, index);
-			return;
-		}
-
-		setEditorData(widget, index);
 		updateEditorGeometry(widget, option, index);
-		
+		setEditorData(widget, index);
+
+		// render
 		QPixmap new_pixmap(targetRect.size());
 		QPainter p(&new_pixmap);
 
@@ -77,174 +85,201 @@ void QOEPropertyItemDelegate::paint(QPainter* painter, const QStyleOptionViewIte
 		widget->render(&p);
 		p.end();
 
-		QPixmapCache::insert(key, new_pixmap);
+		QPixmapCache::remove(item->pixmapKey);
+		item->pixmapKey = QPixmapCache::insert(new_pixmap);
+		item->last_hover = hover;
+		item->value_changed = false;
 
-		pixmap.swap(new_pixmap);
+		painter->save();
+		painter->drawPixmap(targetRect, new_pixmap);
+		painter->restore();
 
-		item->_hover_last = hover;
-		item->_value_expired = false;
+		return;
 	}
 
 	painter->save();
+	/*
+	// Debug margins
+	QStyleOptionViewItemV4 bg(option);
+	bg.backgroundBrush = QBrush(QColor(255, 0, 0), Qt::BrushStyle::SolidPattern);
+	QApplication::style()->drawControl(QStyle::CE_ItemViewItem, &bg, painter);
+	*/
 	painter->drawPixmap(targetRect, pixmap);
 	painter->restore();
 }
 
 QWidget* QOEPropertyItemDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
-	PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
+	QOEPropertiesModelItem* item = static_cast<QOEPropertiesModelItem*>(index.internalPointer());
 
-	QWidget* widget = createEditorWidget(item->getTypeID(), parent);
-	return widget;
+	QWidget* widget = createEditorWidget(item->type->GetKind(), parent);
+
+	if (widget)
+		return widget;
+	else
+		return QStyledItemDelegate::createEditor(parent, option, index);
 }
 
 void QOEPropertyItemDelegate::setEditorData(QWidget* editor, const QModelIndex& index) const
 {
-	PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
+	QOEPropertiesModelItem* item = static_cast<QOEPropertiesModelItem*>(index.internalPointer());
 
-	const metacpp::TypeID typeID = item->getTypeID();
-	void* ptr = item->getProperty()->getPtr();
+	QMutexLocker locker(&item->mutex);
+	const OrbitEngine::Meta::Variant& v = item->value;
 
-#define LOAD_EDITOR_PROPERTY(type, editorClass) \
-	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		##type *value = static_cast< ##type *>(ptr); \
-		##editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
+#define LOAD_EDITOR_PROPERTY(kind, getter, editorClass) \
+	case OrbitEngine::Meta::Kind::kind: \
+	{ \
+		const auto& value = v.getter(); \
+		editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
 
-#define LOAD_EDITOR_PROPERTY_QT(type, editorClass, editorSetValue) \
-	LOAD_EDITOR_PROPERTY(type, editorClass) \
-		editor_widget->editorSetValue((##type)(*value)); \
+#define LOAD_EDITOR_PROPERTY_QT(kind, getter, editorClass) \
+	LOAD_EDITOR_PROPERTY(kind, getter, editorClass) \
+		editor_widget->setValue(value); \
+		break; \
 	} \
 
-#define LOAD_EDITOR_PROPERTY_VECTOR(type, vType, vN) \
-	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		##type *value = static_cast< ##type *>(ptr); \
-		QNumericVector< ##vType, ##vN > *editor_widget = static_cast< QNumericVector< ##vType, ##vN > *>(editor); \
+#define LOAD_EDITOR_PROPERTY_VECTOR_QT(kind, getter, type, vN) \
+	case OrbitEngine::Meta::Kind::kind: \
+	{ \
+		const auto& value = v.getter(); \
+		QNumericVector<##type, ##vN> *editor_widget = static_cast< QNumericVector<##type, ##vN> *>(editor); \
 		for(int i = 0; i < vN; i++) { \
-			editor_widget->setValue(value->data[i], i); \
+			editor_widget->setValue(value.data[i], i); \
 		} \
+		break; \
 	} \
 
-	if (false) {}
-	LOAD_EDITOR_PROPERTY_QT(char, QNumeric<char>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(short, QNumeric<short>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(int, QNumeric<int>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(long, QNumeric<long>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(long long, QNumeric<long long>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(unsigned char, QNumeric<unsigned char>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(unsigned short, QNumeric<unsigned short>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(unsigned int, QNumeric<unsigned int>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(unsigned long, QNumeric<unsigned long>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(unsigned long long, QNumeric<unsigned long long>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(double, QNumeric<double>, setValue)
-	LOAD_EDITOR_PROPERTY_QT(float, QNumeric<float>, setValue)
-	LOAD_EDITOR_PROPERTY(std::string, QLineEdit)
-		editor_widget->setText(QString::fromStdString(*value));
-	}
-	LOAD_EDITOR_PROPERTY(bool, QCheckBox)
-		editor_widget->setCheckState(*value ? Qt::CheckState::Checked : Qt::CheckState::Unchecked);
-	}
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<float>, float, 2)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<float>, float, 3)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<float>, float, 4)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<int>, int, 2)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<int>, int, 3)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<int>, int, 4)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<double>, double, 2)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<double>, double, 3)
-	LOAD_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<double>, double, 4)
+	if (v.IsValid() && !v.IsNull()) {
+		switch (item->type->GetKind()) {
+		LOAD_EDITOR_PROPERTY_QT(CHAR, GetChar, QNumeric<char>)
+		LOAD_EDITOR_PROPERTY_QT(INT, GetInt, QNumeric<int>)
+		LOAD_EDITOR_PROPERTY_QT(UINT, GetInt, QNumeric<unsigned int>)
+		LOAD_EDITOR_PROPERTY_QT(LONG, GetLong, QNumeric<long>)
+		LOAD_EDITOR_PROPERTY_QT(LONGLONG, GetLongLong, QNumeric<long long>)
+		LOAD_EDITOR_PROPERTY_QT(ULONG, GetULong, QNumeric<unsigned long>)
+		LOAD_EDITOR_PROPERTY_QT(ULONGLONG, GetULongLong, QNumeric<unsigned long long>)
+		LOAD_EDITOR_PROPERTY_QT(DOUBLE, GetDouble, QNumeric<double>)
+		LOAD_EDITOR_PROPERTY_QT(FLOAT, GetFloat, QNumeric<float>)
 
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC2_INT, GetVec2i, int, 2)
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC3_INT, GetVec3i, int, 3)
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC4_INT, GetVec4i, int, 4)
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC2_FLOAT, GetVec2f, float, 2)
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC3_FLOAT, GetVec3f, float, 3)
+		LOAD_EDITOR_PROPERTY_VECTOR_QT(VEC4_FLOAT, GetVec4f, float, 4)
+
+		LOAD_EDITOR_PROPERTY(BOOL, GetBool, QCheckBox)
+			editor_widget->setCheckState(value ? Qt::CheckState::Checked : Qt::CheckState::Unchecked);
+			break;
+		}
+		LOAD_EDITOR_PROPERTY(STRING, GetString, QLineEdit)
+			editor_widget->setText(QString::fromStdString(value));
+			break;
+		}
+		default:
+			// nope
+			break;
+		}
+	}
 }
 
 void QOEPropertyItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const
 {
-	PropertiesModelNode* item = static_cast<PropertiesModelNode*>(index.internalPointer());
+	QOEPropertiesModelItem* item = static_cast<QOEPropertiesModelItem*>(index.internalPointer());
 
-	const metacpp::TypeID typeID = item->getTypeID();
+	QMutexLocker locker(&item->mutex);
+	OrbitEngine::Meta::Variant v;
 
-#define STORE_EDITOR_PROPERTY(type, editorClass) \
-	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		OrbitEngine::Misc::Property< ##type >* prop = static_cast<OrbitEngine::Misc::Property< ##type >*>(item->getProperty()); \
-		##editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
+#define STORE_EDITOR_PROPERTY(kind, editorClass) \
+	case OrbitEngine::Meta::Kind::kind: \
+	{ \
+		editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
 
-#define STORE_EDITOR_PROPERTY_QT(type, editorClass, editorGetValue) \
-	STORE_EDITOR_PROPERTY(type, editorClass) \
-		*prop = (##type)editor_widget->editorGetValue(); \
+#define STORE_EDITOR_PROPERTY_QT(kind, editorClass) \
+	STORE_EDITOR_PROPERTY(kind, editorClass) \
+		v = OrbitEngine::Meta::Variant(editor_widget->value()); \
+		break; \
 	} \
 
-#define STORE_EDITOR_PROPERTY_VECTOR(type, vType, vN) \
-	else if (typeID == metacpp::TypeInfo< ##type >::ID) { \
-		OrbitEngine::Misc::Property< ##type >* prop = static_cast<OrbitEngine::Misc::Property< ##type >*>(item->getProperty()); \
-		QNumericVector< ##vType, ##vN > *editor_widget = static_cast< QNumericVector< ##vType, ##vN > *>(editor); \
-		##type vec; \
+#define STORE_EDITOR_PROPERTY_VECTOR_QT(kind, vec_type, type, vN) \
+	case OrbitEngine::Meta::Kind::kind: \
+	{ \
+		QNumericVector<##type, ##vN> *editor_widget = static_cast< QNumericVector<##type, ##vN> *>(editor); \
+		vec_type vec; \
 		for(int i = 0; i < vN; i++) { \
 			vec.data[i] = editor_widget->value(i); \
 		} \
-		*prop = vec; \
+		v = OrbitEngine::Meta::Variant(vec); \
+		break; \
 	} \
 
-	if (false) {}
-	STORE_EDITOR_PROPERTY_QT(char, QNumeric<char>, value)
-	STORE_EDITOR_PROPERTY_QT(short, QNumeric<short>, value)
-	STORE_EDITOR_PROPERTY_QT(int, QNumeric<int>, value)
-	STORE_EDITOR_PROPERTY_QT(long, QNumeric<long>, value)
-	STORE_EDITOR_PROPERTY_QT(long long, QNumeric<long long>, value)
-	STORE_EDITOR_PROPERTY_QT(unsigned char, QNumeric<unsigned char>, value)
-	STORE_EDITOR_PROPERTY_QT(unsigned short, QNumeric<unsigned short>, value)
-	STORE_EDITOR_PROPERTY_QT(unsigned int, QNumeric<unsigned int>, value)
-	STORE_EDITOR_PROPERTY_QT(unsigned long, QNumeric<unsigned long>, value)
-	STORE_EDITOR_PROPERTY_QT(unsigned long long, QNumeric<unsigned long long>, value)
-	STORE_EDITOR_PROPERTY_QT(double, QNumeric<double>, value)
-	STORE_EDITOR_PROPERTY_QT(float, QNumeric<float>, value)
-	STORE_EDITOR_PROPERTY(std::string, QLineEdit)
-		*prop = editor_widget->text().toStdString();
-	}
-	STORE_EDITOR_PROPERTY(bool, QCheckBox)
-		*prop = editor_widget->checkState() == Qt::CheckState::Checked;
-	}
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<float>, float, 2)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<float>, float, 3)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<float>, float, 4)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<int>, int, 2)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<int>, int, 3)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<int>, int, 4)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec2<double>, double, 2)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec3<double>, double, 3)
-	STORE_EDITOR_PROPERTY_VECTOR(OrbitEngine::Math::Vec4<double>, double, 4)
 
-	item->_value_expired = true;
+	switch (item->type->GetKind()) {
+		STORE_EDITOR_PROPERTY_QT(CHAR, QNumeric<char>)
+		STORE_EDITOR_PROPERTY_QT(INT, QNumeric<int>)
+		STORE_EDITOR_PROPERTY_QT(UINT, QNumeric<unsigned int>)
+		STORE_EDITOR_PROPERTY_QT(LONG, QNumeric<long>)
+		STORE_EDITOR_PROPERTY_QT(LONGLONG, QNumeric<long long>)
+		STORE_EDITOR_PROPERTY_QT(ULONG, QNumeric<unsigned long>)
+		STORE_EDITOR_PROPERTY_QT(ULONGLONG, QNumeric<unsigned long long>)
+		STORE_EDITOR_PROPERTY_QT(DOUBLE, QNumeric<double>)
+		STORE_EDITOR_PROPERTY_QT(FLOAT, QNumeric<float>)
+			
+		STORE_EDITOR_PROPERTY(BOOL, QCheckBox)
+			v = OrbitEngine::Meta::Variant(editor_widget->checkState() == Qt::CheckState::Checked);
+			break;
+		}
+		STORE_EDITOR_PROPERTY(STRING, QLineEdit)
+			v = OrbitEngine::Meta::Variant(editor_widget->text().toStdString());
+			break;
+		}
+
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC2_INT, OrbitEngine::Math::Vec2i, int, 2)
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC3_INT, OrbitEngine::Math::Vec3i, int, 3)
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC4_INT, OrbitEngine::Math::Vec4i, int, 4)
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC2_FLOAT, OrbitEngine::Math::Vec2f, float, 2)
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC3_FLOAT, OrbitEngine::Math::Vec3f, float, 3)
+		STORE_EDITOR_PROPERTY_VECTOR_QT(VEC4_FLOAT, OrbitEngine::Math::Vec4f, float, 4)
+	}
+	
+	if (v.IsValid()) {
+		if (item->value != v) {
+			item->value = v;
+			item->value_changed = true;
+			QMetaObject::invokeMethod(m_EditorInteraction, "setProperty", Qt::QueuedConnection, Q_ARG(OrbitEngine::Meta::Member*, item->member), Q_ARG(void*, item->parent->object), Q_ARG(OrbitEngine::Meta::Variant, v));
+		}
+	}
 }
 
-QWidget* QOEPropertyItemDelegate::createEditorWidget(const metacpp::TypeID typeID, QWidget* parent) const
+QWidget* QOEPropertyItemDelegate::createEditorWidget(const OrbitEngine::Meta::Kind kind, QWidget* parent) const
 {
 	QWidget* widget = 0;
 
-#define SUPPORTED_PROPERTY(type, propertyClass) \
-	else if (typeID == metacpp::TypeInfo< ##type >::ID) { widget = new propertyClass(parent); } \
+#define SUPPORTED_PROPERTY(kind, widgetType) \
+	case OrbitEngine::Meta::Kind::kind: widget = new widgetType(parent); break;
 
-	if (false) {}
-	SUPPORTED_PROPERTY(std::string, QLineEdit)
-	SUPPORTED_PROPERTY(bool, QCheckBox)
-	SUPPORTED_PROPERTY(char, QNumeric<char>)
-	SUPPORTED_PROPERTY(short, QNumeric<short>)
-	SUPPORTED_PROPERTY(int, QNumeric<int>)
-	SUPPORTED_PROPERTY(long, QNumeric<long>)
-	SUPPORTED_PROPERTY(long long, QNumeric<long long>)
-	SUPPORTED_PROPERTY(unsigned char, QNumeric<unsigned char>)
-	SUPPORTED_PROPERTY(unsigned short, QNumeric<unsigned short>)
-	SUPPORTED_PROPERTY(unsigned int, QNumeric<unsigned int>)
-	SUPPORTED_PROPERTY(unsigned long, QNumeric<unsigned long>)
-	SUPPORTED_PROPERTY(unsigned long long, QNumeric<unsigned long long>)
-	SUPPORTED_PROPERTY(double, QNumeric<double>)
-	SUPPORTED_PROPERTY(float, QNumeric<float>)
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec2<float>, (QNumericVector<float, 2>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec3<float>, (QNumericVector<float, 3>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec4<float>, (QNumericVector<float, 4>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec2<int>, (QNumericVector<int, 2>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec3<int>, (QNumericVector<int, 3>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec4<int>, (QNumericVector<int, 4>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec2<double>, (QNumericVector<double, 2>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec3<double>, (QNumericVector<double, 3>))
-	SUPPORTED_PROPERTY(OrbitEngine::Math::Vec4<double>, (QNumericVector<double, 4>))
+	switch (kind)
+	{
+	SUPPORTED_PROPERTY(BOOL, QCheckBox)
+	SUPPORTED_PROPERTY(CHAR, QNumeric<char>)
+	SUPPORTED_PROPERTY(INT, QNumeric<int>)
+	SUPPORTED_PROPERTY(UINT, QNumeric<unsigned int>)
+	SUPPORTED_PROPERTY(LONG, QNumeric<long>)
+	SUPPORTED_PROPERTY(LONGLONG, QNumeric<long long>)
+	SUPPORTED_PROPERTY(ULONG, QNumeric<unsigned long>)
+	SUPPORTED_PROPERTY(ULONGLONG, QNumeric<unsigned long long>)
+	SUPPORTED_PROPERTY(DOUBLE, QNumeric<double>)
+	SUPPORTED_PROPERTY(FLOAT, QNumeric<float>)
+	SUPPORTED_PROPERTY(STRING, QLineEdit)
+
+	SUPPORTED_PROPERTY(VEC2_INT, (QNumericVector<int, 2>))
+	SUPPORTED_PROPERTY(VEC3_INT, (QNumericVector<int, 3>))
+	SUPPORTED_PROPERTY(VEC4_INT, (QNumericVector<int, 4>))
+	SUPPORTED_PROPERTY(VEC2_FLOAT, (QNumericVector<float, 2>))
+	SUPPORTED_PROPERTY(VEC3_FLOAT, (QNumericVector<float, 3>))
+	SUPPORTED_PROPERTY(VEC4_FLOAT, (QNumericVector<float, 4>))
+	}
 
 	if (widget != nullptr)
 		widget->setFocusPolicy(Qt::FocusPolicy::StrongFocus);
@@ -257,10 +292,11 @@ void QOEPropertyItemDelegate::updateEditorGeometry(QWidget* editor, const QStyle
 	editor->setGeometry(updateRect(option.rect));
 }
 
-QRect QOEPropertyItemDelegate::updateRect(const QRect& rect) const
+QRect QOEPropertyItemDelegate::updateRect(const QRect & rect) const
 {
 	QRect targetRect = rect;
-	targetRect.setHeight(targetRect.height() - 5);
+	targetRect.setHeight(targetRect.height() - 2);
 	targetRect.setRight(targetRect.right() - 5);
+	targetRect.setTop(targetRect.top() + 2);
 	return targetRect;
 }

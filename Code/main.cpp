@@ -15,8 +15,6 @@
 #include <OE/Application/Looper.hpp>
 using namespace OrbitEngine;
 
-#include <MetaCPP/Runtime.hpp>
-#include <MetaCPP/TypeInfo.hpp>
 #include <OE/Engine/SceneObject.hpp>
 
 
@@ -32,15 +30,6 @@ void ReplaceStringInPlace(std::string& subject, const std::string& search,
 
 int main(int argc, char *argv[])
 {
-	metacpp::generated::Load(metacpp::Runtime::GetStorage());
-
-	metacpp::Storage* storage = metacpp::Runtime::GetStorage();
-	storage->dump();
-
-	auto tinfo = metacpp::TypeInfo<OrbitEngine::Engine::SceneObject>::TYPE;
-	if(tinfo)
-		tinfo->dump();
-
     QApplication app(argc, argv);
 	
 	/* Configuration */
@@ -57,11 +46,13 @@ int main(int argc, char *argv[])
 	projectSelector.show();
 
 
-
-
-
+	/// -------------------------------------------------------------------------
 	QTimer *timer = new QTimer();
 	QObject::connect(timer, &QTimer::timeout, [&]() -> void {
+		static bool once = false;
+		if (once) return;
+		once = true;
+
 		QFile globalQss("D:/Google Drive/Programming/C++/OrbitEngine-Editor/Resources/stylesheets/global.qss");
 		globalQss.open(QFile::ReadOnly);
 		std::string qss = globalQss.readAll();
@@ -84,6 +75,7 @@ int main(int argc, char *argv[])
 		app.setStyleSheet(QString::fromStdString(qss));
 	});
 	timer->start(500);
+	/// -------------------------------------------------------------------------
 
     return app.exec();
 }

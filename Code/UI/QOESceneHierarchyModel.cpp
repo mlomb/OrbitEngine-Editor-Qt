@@ -1,5 +1,6 @@
 #include "QOESceneHierarchyModel.hpp"
 
+#include <chrono>
 #if _WIN32
 #include <windows.h>
 #else
@@ -7,66 +8,96 @@
 #endif
 
 #include <qpixmapcache.h>
+#include <qtimer.h>
+#include <qmetaobject.h>
+#include <QMimeData>
 
 #include <iostream>
 #include <thread>
+#include <set>
 
 #include "Icons.hpp"
 
 #include "OE/Engine/MeshRenderer.hpp"
 
-QOESceneHierarchyModel::QOESceneHierarchyModel(OrbitEngine::Engine::SceneObject* root)
-	: m_Root(root)
-{
-	m_Root->internal_EditorIndex = new QPersistentModelIndex(QModelIndex());
-	fillInternalCallbacks(m_Root);
-	
-	// TEST
-	new std::thread([&]() {
-		int i = 4;
-		while (true) {
-#define ttt 500
-#if _WIN32
-			Sleep(ttt);
-#else
-			usleep(ttt * 1000);
-#endif
-			OrbitEngine::Engine::SceneObject* toAdd = i % 2 ? m_Root : m_Root->childAt(1);
-			OrbitEngine::Engine::SceneObject* added = toAdd->addChildren("Child" + std::to_string(i));
-			if (added) {
-				added->addComponent<OrbitEngine::Engine::MeshRenderer>();
-				//std::cout << "Added " << i << "\n";
-				i++;
+const QString SceneObjectMIME = "application/SceneObject";
 
-				m_Root->childAt(1)->m_Name = "just added " + std::to_string(i);
-			}
-		}
-	});
+QOESceneHierarchyModel::QOESceneHierarchyModel(EditorInteraction* editorInteraction, QTreeView* view)
+	: m_EditorInteraction(editorInteraction), m_View(view)
+{
+	qRegisterMetaType<QVector<int>>();
+	qRegisterMetaType<QList<QPersistentModelIndex>>();
+	qRegisterMetaType<QAbstractItemModel::LayoutChangeHint>();
+
+	m_Root = new QOESceneHierarchyItem();
+
+	connect(m_EditorInteraction, SIGNAL(sync()), this, SLOT(sync()), Qt::ConnectionType::DirectConnection);
 }
 
 QOESceneHierarchyModel::~QOESceneHierarchyModel()
 {
 }
 
-void QOESceneHierarchyModel::fillInternalCallbacks(OrbitEngine::Engine::SceneObject* obj)
-{
-	obj->internal_EditorBeginInsert = [&](int position, OrbitEngine::Engine::SceneObject* parent) {
-		QPersistentModelIndex* pindex = static_cast<QPersistentModelIndex*>(parent->internal_EditorIndex);
-		if (pindex)
-			beginInsertRows(*pindex, position, position);
-		else
-			Q_ASSERT(false);
-	};
-	obj->internal_EditorEndInsert = std::bind(&QOESceneHierarchyModel::endInsertRows, this);
-	
-	for (OrbitEngine::Engine::SceneObject* child : obj->getChildrens())
-		fillInternalCallbacks(child);
+void QOESceneHierarchyModel::sync() {
+	m_Root->ref = m_EditorInteraction->GetEngineDomain()->GetActiveScene()->GetRoot();
+	sync(m_Root, QModelIndex());
 }
 
-OrbitEngine::Engine::SceneObject* QOESceneHierarchyModel::getItemFromIndex(const QModelIndex& index) const
+void QOESceneHierarchyModel::sync(QOESceneHierarchyItem* item, const QModelIndex& index)
+{
+	if (!item)
+		return;
+
+	{
+		QMutexLocker locker(&item->mutex);
+
+		if (item->text != item->ref->getName()) {
+			item->text = item->ref->getName();
+			emit dataChanged(index, index, { Qt::DisplayRole, Qt::EditRole });
+			//QMetaObject::invokeMethod(this, "dataChanged", Qt::QueuedConnection, Q_ARG(const QModelIndex&, index), Q_ARG(const QModelIndex&, index), Q_ARG(const QVector<int>&, { Qt::DisplayRole }));
+		}
+
+		// Optimize the syncronization
+		bool modification = false;
+		if (item->childrens.size() != item->ref->getChildrens().size()) {
+			item->childrens.resize(item->ref->getChildrens().size());
+			modification = true;
+		}
+
+		int i = 0;
+		for (OrbitEngine::Engine::SceneObject* child : item->ref->getChildrens()) {
+			QOESceneHierarchyItem* sel = item->childrens[i];
+			if (!sel) {
+				// TODO FIX MEMORY LAKE
+				sel = item->childrens[i] = new QOESceneHierarchyItem();
+				sel->icon = "cube";
+				sel->ref = child;
+				sel->parent = item;
+			}
+			else {
+				if (sel->ref != child) {
+					sel->ref = child;
+				}
+			}
+			i++;
+		}
+
+		if (modification) {
+			QList<QPersistentModelIndex> a = { QPersistentModelIndex(index) };
+			emit layoutChanged(a);
+		}
+	}
+
+	int row = 0;
+	for (QOESceneHierarchyItem* child : item->childrens) {
+		sync(child, this->index(row++, 0, index));
+	}
+}
+
+QOESceneHierarchyItem* QOESceneHierarchyModel::getItemFromIndex(const QModelIndex& index) const
 {
 	if (index.isValid()) {
-		OrbitEngine::Engine::SceneObject* item = static_cast<OrbitEngine::Engine::SceneObject*>(index.internalPointer());
+		QOESceneHierarchyItem* item = static_cast<QOESceneHierarchyItem*>(index.internalPointer());
 		if (item)
 			return item;
 	}
@@ -78,18 +109,17 @@ QModelIndex QOESceneHierarchyModel::index(int row, int column, const QModelIndex
 	if (parent.isValid() && parent.column() != 0)
 		return QModelIndex();
 
-	OrbitEngine::Engine::SceneObject* parentItem = getItemFromIndex(parent);
-	OrbitEngine::Engine::SceneObject* childItem = parentItem->childAt(row);
+	QOESceneHierarchyItem* parentItem = getItemFromIndex(parent);
 
-	if (childItem) {
-		QModelIndex index = createIndex(row, column, childItem);
-		// Is this a memory leak?
-		if (childItem->internal_EditorIndex == 0)
-			childItem->internal_EditorIndex = new QPersistentModelIndex(index);
-		return index;
+	if (row >= 0 && row < parentItem->childrens.size()) {
+		QOESceneHierarchyItem* childItem = parentItem->childrens[row];
+
+		if (childItem) {
+			QModelIndex index = createIndex(row, column, childItem);
+			return index;
+		}
 	}
-	else
-		return QModelIndex();
+	return QModelIndex();
 }
 
 QModelIndex QOESceneHierarchyModel::parent(const QModelIndex& index) const
@@ -97,19 +127,19 @@ QModelIndex QOESceneHierarchyModel::parent(const QModelIndex& index) const
 	if (!index.isValid())
 		return QModelIndex();
 
-	OrbitEngine::Engine::SceneObject* childItem = getItemFromIndex(index);
-	OrbitEngine::Engine::SceneObject* parentItem = childItem->getParent();
+	QOESceneHierarchyItem* childItem = getItemFromIndex(index);
+	QOESceneHierarchyItem* parentItem = childItem->parent;
 
 	if (parentItem == m_Root)
 		return QModelIndex();
 
-	return createIndex(parentItem->childCount(), 0, parentItem);
+	return createIndex(int(parentItem->childrens.size()), 0, parentItem);
 }
 
 int QOESceneHierarchyModel::rowCount(const QModelIndex& parent) const
 {
-	OrbitEngine::Engine::SceneObject* parentItem = getItemFromIndex(parent);
-	return parentItem->childCount();
+	QOESceneHierarchyItem* parentItem = getItemFromIndex(parent);
+	return int(parentItem->childrens.size());
 }
 
 int QOESceneHierarchyModel::columnCount(const QModelIndex& parent) const
@@ -117,24 +147,94 @@ int QOESceneHierarchyModel::columnCount(const QModelIndex& parent) const
 	return 1;
 }
 
+Qt::DropActions QOESceneHierarchyModel::supportedDropActions() const
+{
+	return Qt::MoveAction;
+}
+
+QMimeData* QOESceneHierarchyModel::mimeData(const QModelIndexList& indexes) const
+{
+	QVector<QOESceneHierarchyItem*>* items = new QVector<QOESceneHierarchyItem*>();
+	for (auto i : indexes)
+		(*items) << getItemFromIndex(i);
+
+	QByteArray encodedData(QString::number((quintptr)items).toUtf8());
+
+	QMimeData* md = new QMimeData();
+	md->setData(SceneObjectMIME, encodedData);
+	return md;
+}
+
+QStringList QOESceneHierarchyModel::mimeTypes() const
+{
+	QStringList list;
+	list << SceneObjectMIME;
+	return list;
+}
+
+Qt::ItemFlags QOESceneHierarchyModel::flags(const QModelIndex& index) const
+{
+	Qt::ItemFlags flags = QAbstractItemModel::flags(index);
+
+	if (index.isValid())
+		return flags | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled | Qt::ItemIsEditable;
+	else
+		return flags | Qt::ItemIsDropEnabled;
+}
+
 QVariant QOESceneHierarchyModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid())
         return QVariant();
 
-	OrbitEngine::Engine::SceneObject* item = getItemFromIndex(index);
+	QOESceneHierarchyItem* item = getItemFromIndex(index);
+
+	QMutexLocker locker(&item->mutex);
 
 	switch (role) {
 	case Qt::DisplayRole:
 	case Qt::EditRole:
-		return QString::fromStdString(item->getName());
+		return QString::fromStdString(item->text);
 	case Qt::DecorationRole:
 	{
-		std::string iconName = "cube";
-		return Icons::GetIcon(iconName);
+		return Icons::GetIcon(item->icon);
 	}
 	default:
 		return QVariant();
 	}
 
+}
+
+bool QOESceneHierarchyModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column, const QModelIndex& parent)
+{
+	if (action == Qt::DropAction::MoveAction) {
+		QOESceneHierarchyItem* parent_item = getItemFromIndex(parent);
+
+		QByteArray encodedData = data->data(SceneObjectMIME);
+		QVector<QOESceneHierarchyItem*>* items = (QVector<QOESceneHierarchyItem*>*)encodedData.toULongLong();
+		if (!items) return false;
+		
+		for (QOESceneHierarchyItem* child_item : (*items)) {
+			QMetaObject::invokeMethod(m_EditorInteraction, "parent", Qt::QueuedConnection, Q_ARG(OrbitEngine::Engine::SceneObject*, child_item->ref), Q_ARG(OrbitEngine::Engine::SceneObject*, parent_item->ref), Q_ARG(int, row));
+		}
+
+		delete items;
+		return false;
+	}
+	return QAbstractItemModel::dropMimeData(data, action, row, column, parent);
+}
+
+bool QOESceneHierarchyModel::setData(const QModelIndex& index, const QVariant& value, int role)
+{
+	if (index.isValid()) {
+		QOESceneHierarchyItem* item = getItemFromIndex(index);
+		OrbitEngine::Engine::SceneObject* obj = item->ref;
+
+		if (role == Qt::EditRole) {
+			QMetaObject::invokeMethod(m_EditorInteraction, "rename", Qt::QueuedConnection, Q_ARG(OrbitEngine::Engine::SceneObject*, obj), Q_ARG(const QString, value.toString()));
+			item->text = value.toString().toStdString();
+			return true;
+		}
+	}
+	return false;
 }

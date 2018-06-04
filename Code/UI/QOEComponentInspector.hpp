@@ -4,10 +4,9 @@
 #include <QWidget>
 #include <qlineedit.h>
 
-#include "OE/Engine/SceneObject.hpp"
-#include "OE/Misc/Property.hpp"
+#include "EditorInteraction.hpp"
 
-#include "QOEPropertiesModel.hpp"
+#include "OE/Engine/SceneObject.hpp"
 
 namespace Ui {
 	class QOEComponentInspector;
@@ -17,10 +16,10 @@ class QOEComponentInspector : public QWidget {
     Q_OBJECT
 
 public:
-	QOEComponentInspector(OrbitEngine::Engine::SceneObject* sceneObject, QWidget *parent = 0);
+	QOEComponentInspector(OrbitEngine::Engine::SceneObject* sceneObject, EditorInteraction* editorInteraction, QWidget *parent = 0);
     virtual ~QOEComponentInspector();
 
-	OrbitEngine::Engine::SceneObject* getSceneObject();
+	OrbitEngine::Engine::SceneObject* GetSceneObject();
 
 private:
 	QScopedPointer<Ui::QOEComponentInspector> ui;

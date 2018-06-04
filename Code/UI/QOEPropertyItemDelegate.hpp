@@ -10,23 +10,22 @@
 class QOEPropertyItemDelegate : public QStyledItemDelegate {
 	Q_OBJECT
 public:
-	QOEPropertyItemDelegate(QObject* parent = 0);
+	QOEPropertyItemDelegate(EditorInteraction* editorInteraction, QObject* parent = 0);
 	~QOEPropertyItemDelegate();
 
-	void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-
+	void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 
-	void setEditorData(QWidget *editor, const QModelIndex &index) const override;
-	void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override;
+	void setEditorData(QWidget* editor, const QModelIndex& index) const override;
+	void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override;
 
-	void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+	void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 	QRect updateRect(const QRect& rect) const;
 
 private:
-	QWidget* createEditorWidget(const metacpp::TypeID typeID, QWidget* parent) const;
+	EditorInteraction* m_EditorInteraction;
 
-	static QMap<metacpp::TypeID, QWidget*> s_Placeholders;
+	QWidget* createEditorWidget(const OrbitEngine::Meta::Kind kind, QWidget* parent = 0) const;
 };
 
 #endif

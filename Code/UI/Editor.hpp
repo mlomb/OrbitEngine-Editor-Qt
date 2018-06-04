@@ -3,11 +3,16 @@
 
 #include <QMainWindow>
 #include <QTreeView>
+#include <QEventLoop>
 
-#include "OE/Engine/Scene.hpp"
-#include "SceneView.hpp"
+#include <OE/Engine/Scene.hpp>
+#include <OE/Engine/EngineDomain.hpp>
 
-#include <OE/Engine/SceneRunner.hpp>
+#include <OE/Engine/SceneRenderer.hpp>
+
+#include "EditorLooper.hpp"
+#include "EditorInteraction.hpp"
+#include "QOESceneHierarchyModel.hpp"
 
 namespace Ui
 {
@@ -22,12 +27,15 @@ public:
     virtual ~Editor();
 
 private slots:
+	void looperInitialized();
 	void sceneObjectSelection(const QItemSelection& selected, const QItemSelection& deselected);
 
 private:
 	QScopedPointer<Ui::Editor> ui;
-	OrbitEngine::Engine::Scene* m_Scene;
-	OrbitEngine::Engine::SceneRunner* m_SceneRunner;
+
+	OrbitEngine::Engine::EngineDomain* m_EngineDomain;
+	OrbitEngine::Engine::EditorLooper* m_EditorLooper;
+	QOESceneHierarchyModel* m_HierarchyModel;
 };
 
 #endif

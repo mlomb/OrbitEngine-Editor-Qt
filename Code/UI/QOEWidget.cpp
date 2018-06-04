@@ -27,7 +27,7 @@ QOEWidget::~QOEWidget()
 {
 	if (m_Looper) {
 		m_Looper->stop();
-		m_Thread->join();
+		m_Thread->wait();
 		delete m_Looper;
 	}
 	if (m_Context)
@@ -75,7 +75,14 @@ bool QOEWidget::event(QEvent* event)
 			props.parent = (OrbitEngine::Application::WindowNativeHandle)winId();
 
 			m_Window = new OrbitEngine::Application::Window(props);
-			m_Thread = new std::thread(&QOEWidget::run, this);
+			m_Thread = new QThread();
+
+			connect(m_Thread, &QThread::started, [this]() -> void
+			{
+				run();
+			});
+
+			m_Thread->start();
 		}
 
 #if OE_WINDOWS

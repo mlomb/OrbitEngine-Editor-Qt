@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>973</width>
+    <width>948</width>
     <height>717</height>
    </rect>
   </property>
@@ -73,7 +73,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>973</width>
+     <width>948</width>
      <height>21</height>
     </rect>
    </property>
@@ -94,6 +94,15 @@
    </widget>
    <addaction name="menuArchivo"/>
    <addaction name="menuConfiguraci_n"/>
+  </widget>
+  <widget class="QDockWidget" name="dock_assets">
+   <property name="windowTitle">
+    <string>Asset Browser</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_4"/>
   </widget>
   <action name="actionNuevo">
    <property name="text">

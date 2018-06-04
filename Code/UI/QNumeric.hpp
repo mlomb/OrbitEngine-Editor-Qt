@@ -1,12 +1,15 @@
 #ifndef qonumeric_hpp
 #define qonumeric_hpp
 
-#include <QWidget>
-#include <qspinbox.h>
 #include <iomanip>
 #include <sstream>
+
+#include <QWidget>
+#include <QSpinBox>
 #include <QPainter>
 #include <QStyleOption>
+#include <QLayout>
+#include <QLabel>
 
 template<typename T>
 class QNumeric : public QAbstractSpinBox {
@@ -115,15 +118,15 @@ inline T QNumeric<T>::convert(const std::string& str, bool& ok) const
 	if (T_is_decimal) {
 		double temp;
 		ss >> temp;
-		temp = MAX(m_Min, temp);
-		temp = MIN(m_Max, temp);
+		temp = MAX(m_Min, (T)temp);
+		temp = MIN(m_Max, (T)temp);
 		val = temp;
 	}
 	else if (T_is_signed) {
 		long long temp;
 		ss >> temp;
-		temp = MAX(m_Min, temp);
-		temp = MIN(m_Max, temp);
+		temp = MAX(m_Min, (T)temp);
+		temp = MIN(m_Max, (T)temp);
 		val = temp;
 	}
 	else {
@@ -131,8 +134,8 @@ inline T QNumeric<T>::convert(const std::string& str, bool& ok) const
 		ss >> temp;
 		if (str[0] == '-')
 			temp = 0;
-		temp = MAX(m_Min, temp);
-		temp = MIN(m_Max, temp);
+		temp = MAX(m_Min, (T)temp);
+		temp = MIN(m_Max, (T)temp);
 		val = temp;
 	}
 
