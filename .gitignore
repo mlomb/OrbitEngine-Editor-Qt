@@ -1,5 +1,6 @@
-Build/
-Builds/
+/Build/
+/Builds/
+win_build.ps1
 
 # Prerequisites
 *.d
@@ -33,4 +34,3 @@ Builds/
 *.exe
 *.out
 *.app
-*.ps1
