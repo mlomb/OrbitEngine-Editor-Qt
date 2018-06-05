@@ -1,0 +1,12 @@
+version: v{build}
+image: Visual Studio 2015
+install:
+- git submodule update --init --recursive
+before_build:
+- ps: . "Tools/Build/Windows/build.ps1"
+build:
+  project: Build/Windows/OrbitEngineEditor.sln
+  verbosity: minimal
+artifacts:
+- path: Build\Windows\Release\Editor.exe
+  name: Editor.exe
