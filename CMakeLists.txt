@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project(OrbitEngineEditor)
 
 # ==== Qt ==== 
-find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
+find_package(Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 
 set(CMAKE_AUTOMOC OFF) # For meta object compiler
 set(CMAKE_AUTORCC OFF) # Resource files
@@ -37,4 +37,4 @@ add_custom_command(TARGET Editor POST_BUILD
 useCXX11(Editor)
 
 set_target_properties(Editor PROPERTIES AUTOMOC ON AUTORCC ON AUTOUIC ON)
-qt5_use_modules(Editor Widgets)
+target_link_libraries (Editor Qt5::Widgets)
