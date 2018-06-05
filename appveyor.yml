@@ -1,6 +1,7 @@
 version: v{build}
 image: Visual Studio 2015
 install:
+- set Qt5_DIR=C:\Qt\5.11
 - git submodule update --init --recursive
 before_build:
 - ps: . "Tools/Build/Windows/build.ps1"
