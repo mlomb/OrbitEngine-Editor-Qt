@@ -1,5 +1,6 @@
 version: v{build}
 image: Visual Studio 2015
+configuration: Release
 environment:
   Qt5_DIR: 'C:\Qt\5.11.0\msvc2015'
   PATH: '%Qt5_DIR%\bin;%PATH%'
@@ -7,10 +8,12 @@ install:
 - git submodule update --init --recursive
 - git clone https://github.com/mlomb/OrbitEngine.git ../OrbitEngine --recursive
 before_build:
-- ps: . "Tools/Build/Windows/build.ps1"
+- ps: . "Tools\Build\Windows\build.ps1"
 build:
-  project: Build/Windows/OrbitEngineEditor.sln
+  project: Build\Windows\OrbitEngineEditor.sln
   verbosity: minimal
+after_build:
+- 7z a -tzip Build\Windows\OrbitEngineEditor.zip Build\Windows\Release\Editor.exe Build\Windows\monosgen-2.0.dll Build\Windows\Resources\*
 artifacts:
-- path: Build\Windows\Release\Editor.exe
-  name: Editor.exe
+- path: Build\Windows\OrbitEngineEditor.zip
+  name: OrbitEngineEditor.zip
