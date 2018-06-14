@@ -12,7 +12,7 @@
 struct QOESceneHierarchyItem {
 	QMutex mutex;
 
-	OrbitEngine::Engine::SceneObject* ref;
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> ref;
 	QOESceneHierarchyItem* parent;
 	std::string icon;
 	std::string text; // dyn

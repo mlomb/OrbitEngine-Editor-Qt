@@ -14,8 +14,8 @@ signals:
 	void sync();
 
 public slots:
-	void parent(OrbitEngine::Engine::SceneObject* child, OrbitEngine::Engine::SceneObject* parent, int position = 9999999);
-	void rename(OrbitEngine::Engine::SceneObject* obj, const QString new_name);
+	void parent(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> child, OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> parent, int position = 9999999);
+	void rename(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> obj, const QString new_name);
 	void setProperty(OrbitEngine::Meta::Member* member, void* object, OrbitEngine::Meta::Variant value);
 
 public:

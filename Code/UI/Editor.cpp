@@ -12,6 +12,7 @@
 #include "EditorLooper.hpp"
 
 Q_DECLARE_METATYPE(OrbitEngine::Engine::SceneObject*);
+Q_DECLARE_METATYPE(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>);
 Q_DECLARE_METATYPE(OrbitEngine::Meta::Member*);
 Q_DECLARE_METATYPE(OrbitEngine::Meta::Variant);
 
@@ -19,9 +20,10 @@ Editor::Editor(QWidget *parent)
 	: QMainWindow(parent), ui(new Ui::Editor)
 {
 	qRegisterMetaType<OrbitEngine::Engine::SceneObject*>("OrbitEngine::Engine::SceneObject*");
+	qRegisterMetaType<OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>>("OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>");
 	qRegisterMetaType<OrbitEngine::Meta::Member*>("OrbitEngine::Meta::Member*");
 	qRegisterMetaType<OrbitEngine::Meta::Variant>("OrbitEngine::Meta::Variant");
-
+	 
 	ui->setupUi(this);
 
 	ui->dock_inspector->setMinimumSize(QSize(350, ui->dock_inspector->minimumHeight()));
@@ -49,7 +51,7 @@ void Editor::sceneObjectSelection(const QItemSelection& selected, const QItemSel
 	if (selected.indexes().isEmpty())
 		return;
 
-	OrbitEngine::Engine::SceneObject* currentSceneObject = 0;
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> currentSceneObject = 0;
 	auto currentWidget = ui->dock_inspector->widget();
 
 	if (currentWidget) {
@@ -66,7 +68,7 @@ void Editor::sceneObjectSelection(const QItemSelection& selected, const QItemSel
 		return;
 	}
 
-	OrbitEngine::Engine::SceneObject* sceneObject = i->ref;
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> sceneObject = i->ref;
 
 	if (currentSceneObject == sceneObject)
 		return;

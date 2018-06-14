@@ -9,15 +9,15 @@ EditorInteraction::EditorInteraction(OrbitEngine::Engine::EngineDomain* engineDo
 {
 }
 
-void EditorInteraction::parent(OrbitEngine::Engine::SceneObject* child, OrbitEngine::Engine::SceneObject* parent, int position) {
-	OE_LOG_DEBUG("PARENT " << child->getName() << " TO " << parent->getName());
-	child->parent(parent, position);
+void EditorInteraction::parent(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> child, OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> parent, int position) {
+	OE_LOG_DEBUG("PARENT " << child->GetName() << " TO " << parent->GetName());
+	child->SetParent(parent, position);
 	m_ForceSync = true;
 }
 
-void EditorInteraction::rename(OrbitEngine::Engine::SceneObject* obj, const QString new_name) {
-	OE_LOG_DEBUG("RENAME " << obj->getName() << " TO " << new_name.toStdString());
-	obj->setName(new_name.toStdString());
+void EditorInteraction::rename(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> obj, const QString new_name) {
+	OE_LOG_DEBUG("RENAME " << obj->GetName() << " TO " << new_name.toStdString());
+	obj->SetName(new_name.toStdString());
 }
 
 void EditorInteraction::setProperty(OrbitEngine::Meta::Member* member, void* object, OrbitEngine::Meta::Variant value)

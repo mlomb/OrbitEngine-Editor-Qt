@@ -25,14 +25,15 @@ namespace OrbitEngine { namespace Engine {
 		emit initialized();
 	}
 
-	void t(Engine::SceneObject* so, Graphics::Renderer2D* r2d, Math::Vec2f& off) {
+	void t(WeakPtr<Engine::SceneObject> so, Graphics::Renderer2D* r2d, Math::Vec2f& off) {
 		//Graphics::BatchRenderer* brd = static_cast<Graphics::BatchRenderer*>(r2d);
 
 		Graphics::Font::GetDefaultFont()->prepareFont(25);
-		Graphics::Font::GetDefaultFont()->drawString(so->getName(), Math::Vec2f(100, 100) + off, *r2d);
+		Graphics::Font::GetDefaultFont()->drawString(so->GetName(), Math::Vec2f(100, 100) + off, *r2d);
 
 		off.x += 25;
-		for (Engine::SceneObject* c : so->getChildrens()) {
+		for (int i = 0; i < so->GetChildCount(); i++) {
+			WeakPtr<Engine::SceneObject> c = so->GetChild(i);
 			off.y += 25;
 			t(c, r2d, off);
 		}
@@ -43,11 +44,13 @@ namespace OrbitEngine { namespace Engine {
 	{
 		static int i = 0;
 		i++;
-		Engine::SceneObject* root = m_EngineDomain->GetActiveScene()->GetRoot();
-		Engine::SceneObject* k = root->getChildrens().at(1);
-		k->setName("Passed " + std::to_string(i) + " frames");
+		WeakPtr<Engine::SceneObject> root = m_EngineDomain->GetActiveScene()->GetRoot();
+		WeakPtr<Engine::SceneObject> k = root->GetChild(1);
+		k->SetName("Passed " + std::to_string(i) + " frames");
 		if (i % 60 == 0) {
-			k->addChildren("Added " + std::to_string(i));
+			WeakPtr<Engine::SceneObject> c = k->AddChildren();
+			if(c)
+				c->SetName("Added " + std::to_string(i));
 		}
 
 		m_Renderer2D->begin();

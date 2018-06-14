@@ -51,21 +51,21 @@ void QOESceneHierarchyModel::sync(QOESceneHierarchyItem* item, const QModelIndex
 	{
 		QMutexLocker locker(&item->mutex);
 
-		if (item->text != item->ref->getName()) {
-			item->text = item->ref->getName();
+		if (item->text != item->ref->GetName()) {
+			item->text = item->ref->GetName();
 			emit dataChanged(index, index, { Qt::DisplayRole, Qt::EditRole });
 			//QMetaObject::invokeMethod(this, "dataChanged", Qt::QueuedConnection, Q_ARG(const QModelIndex&, index), Q_ARG(const QModelIndex&, index), Q_ARG(const QVector<int>&, { Qt::DisplayRole }));
 		}
 
 		// Optimize the syncronization
 		bool modification = false;
-		if (item->childrens.size() != item->ref->getChildrens().size()) {
-			item->childrens.resize(item->ref->getChildrens().size());
+		if (item->childrens.size() != item->ref->GetChildCount()) {
+			item->childrens.resize(item->ref->GetChildCount());
 			modification = true;
 		}
 
-		int i = 0;
-		for (OrbitEngine::Engine::SceneObject* child : item->ref->getChildrens()) {
+		for (int i = 0; i < item->ref->GetChildCount(); i++) {
+			OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> child = item->ref->GetChild(i);
 			QOESceneHierarchyItem* sel = item->childrens[i];
 			if (!sel) {
 				// TODO FIX MEMORY LAKE
@@ -79,7 +79,6 @@ void QOESceneHierarchyModel::sync(QOESceneHierarchyItem* item, const QModelIndex
 					sel->ref = child;
 				}
 			}
-			i++;
 		}
 
 		if (modification) {
@@ -215,7 +214,7 @@ bool QOESceneHierarchyModel::dropMimeData(const QMimeData* data, Qt::DropAction 
 		if (!items) return false;
 		
 		for (QOESceneHierarchyItem* child_item : (*items)) {
-			QMetaObject::invokeMethod(m_EditorInteraction, "parent", Qt::QueuedConnection, Q_ARG(OrbitEngine::Engine::SceneObject*, child_item->ref), Q_ARG(OrbitEngine::Engine::SceneObject*, parent_item->ref), Q_ARG(int, row));
+			QMetaObject::invokeMethod(m_EditorInteraction, "parent", Qt::QueuedConnection, Q_ARG(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>, child_item->ref), Q_ARG(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>, parent_item->ref), Q_ARG(int, row));
 		}
 
 		delete items;
@@ -228,10 +227,10 @@ bool QOESceneHierarchyModel::setData(const QModelIndex& index, const QVariant& v
 {
 	if (index.isValid()) {
 		QOESceneHierarchyItem* item = getItemFromIndex(index);
-		OrbitEngine::Engine::SceneObject* obj = item->ref;
+		OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> obj = item->ref;
 
 		if (role == Qt::EditRole) {
-			QMetaObject::invokeMethod(m_EditorInteraction, "rename", Qt::QueuedConnection, Q_ARG(OrbitEngine::Engine::SceneObject*, obj), Q_ARG(const QString, value.toString()));
+			QMetaObject::invokeMethod(m_EditorInteraction, "rename", Qt::QueuedConnection, Q_ARG(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>, obj), Q_ARG(const QString, value.toString()));
 			item->text = value.toString().toStdString();
 			return true;
 		}

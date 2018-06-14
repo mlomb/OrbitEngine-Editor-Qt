@@ -12,7 +12,7 @@
 
 #include "OE/Engine/Component.hpp"
 
-QOEComponentInspector::QOEComponentInspector(OrbitEngine::Engine::SceneObject* sceneObject, EditorInteraction* editorInteraction, QWidget *parent)
+QOEComponentInspector::QOEComponentInspector(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> sceneObject, EditorInteraction* editorInteraction, QWidget *parent)
 	: QWidget(parent), ui(new Ui::QOEComponentInspector), m_SceneObject(sceneObject)
 {
 	ui->setupUi(this);
@@ -24,14 +24,9 @@ QOEComponentInspector::QOEComponentInspector(OrbitEngine::Engine::SceneObject* s
 	
 	std::vector<void*> components;
 	if (true) {
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
-		components.push_back(sceneObject);
+		components.push_back(sceneObject.Get());
+		components.push_back(sceneObject.Get());
+		components.push_back(sceneObject.Get());
 	}
 	else {
 		OrbitEngine::Meta::ReflectionDatabase* rd = editorInteraction->GetEngineDomain()->GetReflectionDatabase();
@@ -75,7 +70,7 @@ QOEComponentInspector::~QOEComponentInspector()
 
 }
 
-OrbitEngine::Engine::SceneObject* QOEComponentInspector::GetSceneObject()
+OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> QOEComponentInspector::GetSceneObject()
 {
 	return m_SceneObject;
 }

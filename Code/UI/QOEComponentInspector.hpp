@@ -16,14 +16,14 @@ class QOEComponentInspector : public QWidget {
     Q_OBJECT
 
 public:
-	QOEComponentInspector(OrbitEngine::Engine::SceneObject* sceneObject, EditorInteraction* editorInteraction, QWidget *parent = 0);
+	QOEComponentInspector(OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> sceneObject, EditorInteraction* editorInteraction, QWidget *parent = 0);
     virtual ~QOEComponentInspector();
 
-	OrbitEngine::Engine::SceneObject* GetSceneObject();
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> GetSceneObject();
 
 private:
 	QScopedPointer<Ui::QOEComponentInspector> ui;
-	OrbitEngine::Engine::SceneObject* m_SceneObject;
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> m_SceneObject;
 };
 
 #endif
