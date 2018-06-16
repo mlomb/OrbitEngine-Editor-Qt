@@ -53,15 +53,17 @@ int main(int argc, char *argv[])
 		if (once) return;
 		once = true;
 
-		QFile globalQss("D:/Google Drive/Programming/C++/OrbitEngine-Editor/Resources/stylesheets/global.qss");
-		globalQss.open(QFile::ReadOnly);
-		std::string qss = globalQss.readAll();
-		globalQss.close();
+		std::string line, key;
+		std::ifstream a("Resources/stylesheets/global.qss");
+		std::string qss = "";
+		while (std::getline(a, line))
+		{
+			qss += line + "\n";
+		}
 
 		std::map<std::string, std::string> vars;
 
-		std::ifstream infile("D:/Google Drive/Programming/C++/OrbitEngine-Editor/Resources/stylesheets/variables.vars");
-		std::string key;
+		std::ifstream infile("Resources/stylesheets/variables.vars");
 		while (std::getline(infile, key))
 		{
 			std::string value;

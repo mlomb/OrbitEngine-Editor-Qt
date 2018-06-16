@@ -8,8 +8,6 @@
 #include <OE/Engine/Scene.hpp>
 #include <OE/Engine/EngineDomain.hpp>
 
-#include <OE/Engine/SceneRenderer.hpp>
-
 #include "EditorLooper.hpp"
 #include "EditorInteraction.hpp"
 #include "QOESceneHierarchyModel.hpp"

@@ -3,8 +3,13 @@
 #include <QTimer>
 #include <QThread>
 
+#include "OE/Graphics/2D/Renderer2D.hpp"
+#include "OE/Graphics/3D/Renderer3D.hpp"
+
 #include "OE/Graphics/2D/BatchRenderer.hpp"
 #include "OE/Graphics/Font.hpp"
+
+#include "OE/Engine/TestComponent.hpp"
 
 namespace OrbitEngine { namespace Engine {
 	EditorLooper::EditorLooper()
@@ -42,17 +47,6 @@ namespace OrbitEngine { namespace Engine {
 
 	void EditorLooper::render()
 	{
-		static int i = 0;
-		i++;
-		WeakPtr<Engine::SceneObject> root = m_EngineDomain->GetActiveScene()->GetRoot();
-		WeakPtr<Engine::SceneObject> k = root->GetChild(1);
-		k->SetName("Passed " + std::to_string(i) + " frames");
-		if (i % 60 == 0) {
-			WeakPtr<Engine::SceneObject> c = k->AddChildren();
-			if(c)
-				c->SetName("Added " + std::to_string(i));
-		}
-
 		m_Renderer2D->begin();
 
 		Math::Vec2f d;
@@ -62,7 +56,26 @@ namespace OrbitEngine { namespace Engine {
 	}
 	void EditorLooper::update(float delta)
 	{
+		WeakPtr<Engine::SceneObject> root = m_EngineDomain->GetActiveScene()->GetRoot();
+		WeakPtr<Engine::SceneObject> k = root->GetChild(1);
+		static int l = 0;
+		l++;
+		k->SetName("Passed " + std::to_string(l) + " frames");
+		if (l % 60 == 0) {
+			WeakPtr<Engine::SceneObject> c = k->AddChildren();
+			if (c)
+				c->SetName("Added " + std::to_string(l));
+		}
 
+		auto sceneObjects = m_EngineDomain->GetMemoryDomain()->GetAll<SceneObject>();
+		auto trans = m_EngineDomain->GetMemoryDomain()->GetAll<Transform>();
+		auto test_ob = m_EngineDomain->GetMemoryDomain()->GetAll<TestComponent>();
+		auto comps = m_EngineDomain->GetMemoryDomain()->GetAll<Component>();
+
+		int i = 0;
+		for (WeakPtr<SceneObject> so : sceneObjects) {
+			so->SetName("Object #" + std::to_string(i++));
+		}
 
 		// Engine UI Sync
 		m_EditorInteraction->syncEngine();

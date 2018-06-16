@@ -3,6 +3,7 @@
 
 #include <iomanip>
 #include <sstream>
+#include <functional>
 
 #include <QWidget>
 #include <QSpinBox>

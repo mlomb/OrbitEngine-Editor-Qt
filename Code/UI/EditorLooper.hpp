@@ -10,8 +10,10 @@
 #include "OE/Engine/SceneObject.hpp"
 #include "OE/Application/Loopeable.hpp"
 
-#include "OE/Graphics/2D/Renderer2D.hpp"
-#include "OE/Graphics/3D/Renderer3D.hpp"
+namespace OrbitEngine { namespace Graphics {
+	class Renderer2D;
+	class Renderer3D;
+} }
 
 namespace OrbitEngine { namespace Engine {
 

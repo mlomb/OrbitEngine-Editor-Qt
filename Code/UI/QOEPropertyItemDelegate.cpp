@@ -23,7 +23,7 @@ static QWidget* s_Placeholders[50];
 QOEPropertyItemDelegate::QOEPropertyItemDelegate(EditorInteraction* editorInteraction, QObject* parent)
 	: QStyledItemDelegate(parent), m_EditorInteraction(editorInteraction)
 {
-	QPixmapCache::setCacheLimit(10240 * 5); // 30MB
+	QPixmapCache::setCacheLimit(10240 * 5);
 }
 
 QOEPropertyItemDelegate::~QOEPropertyItemDelegate()
@@ -47,12 +47,12 @@ void QOEPropertyItemDelegate::paint(QPainter* painter, const QStyleOptionViewIte
 
 	bool regenerate = true;
 
-	if (item->pixmapKey.isValid()) {
-		if (!item->value_changed && item->last_hover == hover) {
-			if (QPixmapCache::find(item->pixmapKey, &pixmap)) {
-				if (pixmap.size() == targetRect.size())
-					regenerate = false;
-			}
+	// item->pixmapKey.isValid() // Qt > 5.7
+
+	if (!item->value_changed && item->last_hover == hover) {
+		if (QPixmapCache::find(item->pixmapKey, &pixmap)) {
+			if (pixmap.size() == targetRect.size())
+				regenerate = false;
 		}
 	}
 
@@ -131,7 +131,7 @@ void QOEPropertyItemDelegate::setEditorData(QWidget* editor, const QModelIndex& 
 	case OrbitEngine::Meta::Kind::kind: \
 	{ \
 		const auto& value = v.getter(); \
-		editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
+		editorClass *editor_widget = static_cast< editorClass *>(editor); \
 
 #define LOAD_EDITOR_PROPERTY_QT(kind, getter, editorClass) \
 	LOAD_EDITOR_PROPERTY(kind, getter, editorClass) \
@@ -143,7 +143,7 @@ void QOEPropertyItemDelegate::setEditorData(QWidget* editor, const QModelIndex& 
 	case OrbitEngine::Meta::Kind::kind: \
 	{ \
 		const auto& value = v.getter(); \
-		QNumericVector<##type, ##vN> *editor_widget = static_cast< QNumericVector<##type, ##vN> *>(editor); \
+		QNumericVector< type, vN > *editor_widget = static_cast< QNumericVector< type, vN > *>(editor); \
 		for(int i = 0; i < vN; i++) { \
 			editor_widget->setValue(value.data[i], i); \
 		} \
@@ -194,7 +194,7 @@ void QOEPropertyItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* 
 #define STORE_EDITOR_PROPERTY(kind, editorClass) \
 	case OrbitEngine::Meta::Kind::kind: \
 	{ \
-		editorClass *editor_widget = static_cast< ##editorClass *>(editor); \
+		editorClass *editor_widget = static_cast< editorClass *>(editor); \
 
 #define STORE_EDITOR_PROPERTY_QT(kind, editorClass) \
 	STORE_EDITOR_PROPERTY(kind, editorClass) \
@@ -205,7 +205,7 @@ void QOEPropertyItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* 
 #define STORE_EDITOR_PROPERTY_VECTOR_QT(kind, vec_type, type, vN) \
 	case OrbitEngine::Meta::Kind::kind: \
 	{ \
-		QNumericVector<##type, ##vN> *editor_widget = static_cast< QNumericVector<##type, ##vN> *>(editor); \
+		QNumericVector< type, vN > *editor_widget = static_cast< QNumericVector< type, vN > *>(editor); \
 		vec_type vec; \
 		for(int i = 0; i < vN; i++) { \
 			vec.data[i] = editor_widget->value(i); \

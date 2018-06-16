@@ -51,7 +51,7 @@ void Editor::sceneObjectSelection(const QItemSelection& selected, const QItemSel
 	if (selected.indexes().isEmpty())
 		return;
 
-	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> currentSceneObject = 0;
+	OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject> currentSceneObject = OrbitEngine::WeakPtr<OrbitEngine::Engine::SceneObject>();
 	auto currentWidget = ui->dock_inspector->widget();
 
 	if (currentWidget) {

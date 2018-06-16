@@ -26,7 +26,7 @@ ProjectSelector::ProjectSelector(QWidget *parent)
 	updateRecentProjects();
 
 	QTimer::singleShot(50, [this]() {
-		loadProject(QFile("D:/Google Drive/Programming/C++/OrbitEngine Workspace/Projects/Project.oep"));
+		loadProject(QFile("Project.oep"));
 	});
 }
 

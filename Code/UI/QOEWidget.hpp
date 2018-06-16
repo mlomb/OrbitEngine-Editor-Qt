@@ -1,8 +1,11 @@
 #ifndef qoewidget_hpp
 #define qoewidget_hpp
 
+#include <iostream>
+
 #include <QWidget>
 #include <QThread>
+#include <QEvent>
 
 #include <OE/Application/Window.hpp>
 #include <OE/Application/Context.hpp>

@@ -24,16 +24,21 @@ include_directories(
 )
 
 add_executable(Editor ${Editor_SRC} ${Editor_HEADERS} ${Editor_QT})
-target_link_libraries(Editor OrbitEngine -lpthread)
+target_link_libraries(Editor OrbitEngine)
 
 # Copy Binaries
-add_custom_command(TARGET Editor POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy ${OE_BINARIES} ${CMAKE_BINARY_DIR}
-)
+if(OE_BINARIES)
+	add_custom_command(TARGET Editor POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy ${OE_BINARIES} ${CMAKE_BINARY_DIR}
+	)
+endif()
 
-#OE_add_resources(Resources Sandbox)
+# Resources
+OE_add_resources(Resources Editor)
 
 # C++11
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 useCXX11(Editor)
 
 set_target_properties(Editor PROPERTIES AUTOMOC ON AUTORCC ON AUTOUIC ON)

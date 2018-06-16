@@ -48,20 +48,21 @@ void QOESceneHierarchyModel::sync(QOESceneHierarchyItem* item, const QModelIndex
 	if (!item)
 		return;
 
+	bool emit_data_changed = false;
+	bool emit_layout_changed = false;
+
 	{
 		QMutexLocker locker(&item->mutex);
 
 		if (item->text != item->ref->GetName()) {
 			item->text = item->ref->GetName();
-			emit dataChanged(index, index, { Qt::DisplayRole, Qt::EditRole });
-			//QMetaObject::invokeMethod(this, "dataChanged", Qt::QueuedConnection, Q_ARG(const QModelIndex&, index), Q_ARG(const QModelIndex&, index), Q_ARG(const QVector<int>&, { Qt::DisplayRole }));
+			emit_data_changed = true;
 		}
 
 		// Optimize the syncronization
-		bool modification = false;
 		if (item->childrens.size() != item->ref->GetChildCount()) {
 			item->childrens.resize(item->ref->GetChildCount());
-			modification = true;
+			emit_layout_changed = true;
 		}
 
 		for (int i = 0; i < item->ref->GetChildCount(); i++) {
@@ -80,11 +81,15 @@ void QOESceneHierarchyModel::sync(QOESceneHierarchyItem* item, const QModelIndex
 				}
 			}
 		}
+	}
 
-		if (modification) {
-			QList<QPersistentModelIndex> a = { QPersistentModelIndex(index) };
-			emit layoutChanged(a);
-		}
+	if (emit_data_changed) {
+		emit dataChanged(index, index, { Qt::DisplayRole, Qt::EditRole });
+		//QMetaObject::invokeMethod(this, "dataChanged", Qt::QueuedConnection, Q_ARG(const QModelIndex&, index), Q_ARG(const QModelIndex&, index), Q_ARG(const QVector<int>&, { Qt::DisplayRole }));
+	}
+	if (emit_layout_changed) {
+		QList<QPersistentModelIndex> a = { QPersistentModelIndex(index) };
+		emit layoutChanged(a);
 	}
 
 	int row = 0;

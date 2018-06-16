@@ -1,9 +1,5 @@
 #include "QOEWidget.hpp"
 
-#include <iostream>
-
-#include <QEvent>
-
 #include <OE/Platform/OpenGL/OpenGL.hpp>
 
 QOEWidget::QOEWidget(QWidget *parent)
